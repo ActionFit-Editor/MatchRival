@@ -1,0 +1,24 @@
+{
+  "name": "com.actionfit.match-rival.Editor.Tests",
+  "rootNamespace": "ActionFit.MatchRival.Tests",
+  "references": [
+    "com.actionfit.match-rival",
+    "com.actionfit.content-core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
