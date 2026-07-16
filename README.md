@@ -6,12 +6,12 @@ pins, and idempotent round/box reward transactions.
 
 ## Install
 
-Add the private Git UPM package to `Packages/manifest.json`:
+Add the public Git UPM package to `Packages/manifest.json`:
 
 ```json
 {
   "dependencies": {
-    "com.actionfit.match-rival": "https://github.com/ActionFitGames/MatchRival.git#0.1.1"
+    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.1.2"
   }
 }
 ```
@@ -28,7 +28,7 @@ The engine is independent from Cat Merge `Main`, `GameEvents`, `DataStore`, Addr
 analytics SDKs, popup queues, and project UI. A consuming project converts its tables into a
 `MatchRivalCatalog` and keeps its UI and assets outside this package.
 
-For a reusable UI Foundation presentation, install the optional private
+For a reusable UI Foundation presentation, install the optional public
 `com.actionfit.match-rival.ui` package. It depends on this engine and never reverses the dependency.
 Cat Merge production theme assets and popup compatibility wrappers remain project-owned.
 

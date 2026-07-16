@@ -7,9 +7,9 @@ catalog, and reward-safety contracts in consuming projects.
 
 - Package ID: `com.actionfit.match-rival`
 - Display name: ActionFit Match Rival
-- Repository: `https://github.com/ActionFitGames/MatchRival.git`
-- Repository visibility: Private
-- Current package version at generation time: `0.1.1`
+- Repository: `https://github.com/ActionFit-Editor/MatchRival.git`
+- Repository visibility: Public
+- Current package version at generation time: `0.1.2`
 - Unity version: `6000.2`
 - Runtime dependency: `com.actionfit.content-core@0.2.0`
 
