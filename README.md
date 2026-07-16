@@ -11,7 +11,7 @@ Add the private Git UPM package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.actionfit.match-rival": "https://github.com/ActionFitGames/MatchRival.git#0.1.0"
+    "com.actionfit.match-rival": "https://github.com/ActionFitGames/MatchRival.git#0.1.1"
   }
 }
 ```
@@ -27,6 +27,10 @@ Construct `MatchRivalEngine` with:
 The engine is independent from Cat Merge `Main`, `GameEvents`, `DataStore`, Addressables,
 analytics SDKs, popup queues, and project UI. A consuming project converts its tables into a
 `MatchRivalCatalog` and keeps its UI and assets outside this package.
+
+For a reusable UI Foundation presentation, install the optional private
+`com.actionfit.match-rival.ui` package. It depends on this engine and never reverses the dependency.
+Cat Merge production theme assets and popup compatibility wrappers remain project-owned.
 
 ## Durable rewards
 

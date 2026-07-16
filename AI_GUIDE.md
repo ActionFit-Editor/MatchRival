@@ -9,7 +9,7 @@ catalog, and reward-safety contracts in consuming projects.
 - Display name: ActionFit Match Rival
 - Repository: `https://github.com/ActionFitGames/MatchRival.git`
 - Repository visibility: Private
-- Current package version at generation time: `0.1.0`
+- Current package version at generation time: `0.1.1`
 - Unity version: `6000.2`
 - Runtime dependency: `com.actionfit.content-core@0.2.0`
 
@@ -21,7 +21,9 @@ catalog identity, and idempotent round/box reward recovery.
 
 It does not own project event buses, `DataStore`, `DatabaseManager`, CSV/SO loading,
 `TimeProvider`, project inventory mutation, analytics SDKs, UI, Addressables, localization,
-audio, prefabs, or migration reads from Cat Merge legacy keys.
+audio, prefabs, or migration reads from Cat Merge legacy keys. Optional reusable presentation
+lives in the separate `com.actionfit.match-rival.ui` package; never add UI Foundation,
+ReferenceBinding, UGUI, or consuming-project assets to this engine.
 
 ## Project Router Registration
 
@@ -64,6 +66,9 @@ legacy values during the first rollout for rollback.
 
 Do not move or rewrite project prefabs, GUIDs, Addressable keys, analytics keys, or the separate
 `match_rival_bot` root as part of package work.
+
+`com.actionfit.match-rival.ui` may consume public engine reads and commands. Dependency direction
+is project -> optional UI -> engine -> Content Core. The engine must not reference the UI package.
 
 ## Testing
 
