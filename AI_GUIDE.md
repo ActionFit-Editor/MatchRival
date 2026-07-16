@@ -9,9 +9,9 @@ catalog, and reward-safety contracts in consuming projects.
 - Display name: ActionFit Match Rival
 - Repository: `https://github.com/ActionFit-Editor/MatchRival.git`
 - Repository visibility: Public
-- Current package version at generation time: `0.1.2`
+- Current package version at generation time: `0.1.3`
 - Unity version: `6000.2`
-- Runtime dependency: `com.actionfit.content-core@0.2.0`
+- Runtime dependency: `com.actionfit.content-core@0.2.1`
 
 ## Purpose
 
