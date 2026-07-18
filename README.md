@@ -11,7 +11,7 @@ Add the public Git UPM package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.1.3"
+    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.1.4"
   }
 }
 ```
