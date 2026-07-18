@@ -1,44 +1,35 @@
 # ActionFit Match Rival
 
-Project-neutral engine for the scheduled MatchRival event. The package owns the event window,
-stage and Easy/Hard transitions, rival deadline calculation, schema-versioned state, catalog
-pins, and idempotent round/box reward transactions.
+일정 기반 MatchRival 이벤트를 위한 프로젝트 중립 엔진입니다. 이벤트 구간, 스테이지 및 Easy/Hard 전환, 라이벌 제한 시간 계산, 스키마 버전이 있는 상태, 카탈로그 고정과 멱등 라운드/상자 보상 트랜잭션을 패키지가 소유합니다.
 
-## Install
+## 설치
 
-Add the public Git UPM package to `Packages/manifest.json`:
+공개 Git UPM 패키지를 `Packages/manifest.json`에 추가합니다.
 
 ```json
 {
   "dependencies": {
-    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.1.4"
+    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.1.6"
   }
 }
 ```
 
-## Integration
+## 연동
 
-Construct `MatchRivalEngine` with:
+다음 구현을 전달해 `MatchRivalEngine`을 구성합니다.
 
-- an `IContentStateStore` and optional `IFlushableContentStateStore`;
-- an atomic `IContentRewardService`;
-- catalog, clock, random, schedule, unlock, progress-curve, opponent, and analytics adapters.
+- `IContentStateStore`와 선택형 `IFlushableContentStateStore`
+- 원자적 `IContentRewardService`
+- 카탈로그, 시계, 난수, 일정, 해금, 진행 곡선, 상대 및 분석 어댑터
 
-The engine is independent from Cat Merge `Main`, `GameEvents`, `DataStore`, Addressables,
-analytics SDKs, popup queues, and project UI. A consuming project converts its tables into a
-`MatchRivalCatalog` and keeps its UI and assets outside this package.
+엔진은 Cat Merge의 `Main`, `GameEvents`, `DataStore`, Addressables, 분석 SDK, 팝업 큐 및 프로젝트 UI와 독립적입니다. 사용하는 프로젝트는 자체 테이블을 `MatchRivalCatalog`으로 변환하고 UI와 에셋은 이 패키지 밖에서 소유합니다.
 
-For a reusable UI Foundation presentation, install the optional public
-`com.actionfit.match-rival.ui` package. It depends on this engine and never reverses the dependency.
-Cat Merge production theme assets and popup compatibility wrappers remain project-owned.
+재사용 가능한 UI Foundation 프레젠테이션이 필요하면 선택형 공개 패키지 `com.actionfit.match-rival.ui`를 설치합니다. UI 패키지가 이 엔진에 의존하며 역방향 의존성은 만들지 않습니다. Cat Merge 운영 테마 에셋과 팝업 호환 wrapper는 계속 프로젝트가 소유합니다.
 
-## Durable rewards
+## 영속 보상
 
-Result and box claims persist the exact reward snapshot and a transaction ID containing the
-event end ticks and stage before calling `GrantOnce`. On restore, an already-started transaction
-is recovered before normal match or timeout handling.
+결과 및 상자 수령은 `GrantOnce`를 호출하기 전에 정확한 보상 스냅샷과 이벤트 종료 tick 및 스테이지가 포함된 트랜잭션 ID를 영속화합니다. 복원할 때 이미 시작된 트랜잭션을 정상 매치 또는 시간 초과 처리보다 먼저 복구합니다.
 
-## Validation
+## 검증
 
-Run the EditMode assembly `com.actionfit.match-rival.Editor.Tests`. Publishing, repository
-creation, Git tags, and catalog registration remain manual Custom Package Manager actions.
+EditMode 어셈블리 `com.actionfit.match-rival.Editor.Tests`를 실행합니다. publish, 저장소 생성, Git 태그와 카탈로그 등록은 Custom Package Manager에서 수동으로 실행합니다.
