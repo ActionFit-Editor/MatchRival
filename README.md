@@ -9,7 +9,7 @@
 ```json
 {
   "dependencies": {
-    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.1.6"
+    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.2.1"
   }
 }
 ```
@@ -22,9 +22,13 @@
 - 원자적 `IContentRewardService`
 - 카탈로그, 시계, 난수, 일정, 해금, 진행 곡선, 상대 및 분석 어댑터
 
-엔진은 Cat Merge의 `Main`, `GameEvents`, `DataStore`, Addressables, 분석 SDK, 팝업 큐 및 프로젝트 UI와 독립적입니다. 사용하는 프로젝트는 자체 테이블을 `MatchRivalCatalog`으로 변환하고 UI와 에셋은 이 패키지 밖에서 소유합니다.
+엔진은 Cat Merge의 `Main`, `GameEvents`, `DataStore`, Addressables, 분석 SDK, 팝업 큐 및 프로젝트 UI와 독립적입니다. canonical CSV는 이 패키지의 `Data/CSV/`가 소유하며, 사용하는 프로젝트는 `Assets/_Data/_MatchRival/`에 생성된 테이블을 `MatchRivalCatalog`으로 변환합니다. UI와 원본 visual baseline은 별도 UI 패키지가 소유합니다.
 
-재사용 가능한 UI Foundation 프레젠테이션이 필요하면 선택형 공개 패키지 `com.actionfit.match-rival.ui`를 설치합니다. UI 패키지가 이 엔진에 의존하며 역방향 의존성은 만들지 않습니다. Cat Merge 운영 테마 에셋과 팝업 호환 wrapper는 계속 프로젝트가 소유합니다.
+재사용 가능한 UI Foundation 프레젠테이션이 필요하면 선택형 공개 패키지 `com.actionfit.match-rival.ui`를 설치합니다. UI 패키지가 이 엔진에 의존하며 역방향 의존성은 만들지 않습니다. UI 패키지는 원본 production prefab/image baseline을 포함하고, Cat Merge의 Addressable 등록과 팝업 호환 wrapper는 프로젝트가 소유합니다.
+
+시간은 `ActionFit.Time.IClock`과 calendar를 함께 주입합니다. server mode는 synchronized UTC + `TimeZoneInfo.Utc`, device mode는 device-backed UTC + `TimeZoneInfo.Local`을 사용하며, 시작된 deadline은 mode/zone 변경으로 다시 계산하지 않습니다.
+
+`0.2.1`부터 기존 schema 1 저장은 숫자 tick을 변환하지 않고 `LegacyCalendarTicks`인 schema 2로 자동 승격됩니다. 승격된 스냅샷은 보상 복구나 다른 상태 전이보다 먼저 저장 및 flush되며, 알 수 없는 과거/미래 schema는 계속 덮어쓰지 않고 차단됩니다.
 
 ## 영속 보상
 

@@ -2,7 +2,8 @@
   "name": "com.actionfit.match-rival",
   "rootNamespace": "ActionFit.MatchRival",
   "references": [
-    "com.actionfit.content-core"
+    "com.actionfit.content-core",
+    "com.actionfit.time"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

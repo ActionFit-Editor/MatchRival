@@ -3,7 +3,8 @@
   "rootNamespace": "ActionFit.MatchRival.Tests",
   "references": [
     "com.actionfit.match-rival",
-    "com.actionfit.content-core"
+    "com.actionfit.content-core",
+    "com.actionfit.time"
   ],
   "includePlatforms": [
     "Editor"

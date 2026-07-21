@@ -60,6 +60,7 @@ namespace ActionFit.MatchRival
         internal MatchRivalState(MatchRivalStateData data)
         {
             SchemaVersion = data.schemaVersion;
+            TimeBasis = (MatchRivalTimeBasis)data.timeBasis;
             CatalogVersion = data.catalogVersion ?? string.Empty;
             BalanceRevision = data.balanceRevision ?? string.Empty;
             EventStarted = data.eventStarted;
@@ -87,6 +88,7 @@ namespace ActionFit.MatchRival
         }
 
         public int SchemaVersion { get; }
+        public MatchRivalTimeBasis TimeBasis { get; }
         public string CatalogVersion { get; }
         public string BalanceRevision { get; }
         public bool EventStarted { get; }
@@ -125,6 +127,7 @@ namespace ActionFit.MatchRival
     internal sealed class MatchRivalStateData
     {
         public int schemaVersion = MatchRivalStateSerializer.CurrentSchemaVersion;
+        public int timeBasis = (int)MatchRivalTimeBasis.UtcTicks;
         public string catalogVersion = string.Empty;
         public string balanceRevision = string.Empty;
         public bool eventStarted;
@@ -167,7 +170,7 @@ namespace ActionFit.MatchRival
 
     internal static class MatchRivalStateSerializer
     {
-        internal const int CurrentSchemaVersion = 1;
+        internal const int CurrentSchemaVersion = 2;
 
         internal static string Serialize(MatchRivalStateData state)
         {
@@ -175,7 +178,7 @@ namespace ActionFit.MatchRival
             return JsonUtility.ToJson(state);
         }
 
-        internal static MatchRivalStateData Deserialize(string json)
+        internal static MatchRivalStateData Deserialize(string json, out bool upgraded)
         {
             if (string.IsNullOrWhiteSpace(json))
                 throw new FormatException("MatchRival state JSON is empty.");
@@ -190,8 +193,19 @@ namespace ActionFit.MatchRival
                 throw new FormatException("MatchRival state JSON is malformed.", exception);
             }
 
+            upgraded = UpgradeToCurrent(state);
             Validate(state);
             return state;
+        }
+
+        private static bool UpgradeToCurrent(MatchRivalStateData state)
+        {
+            if (state == null || state.schemaVersion != 1) return false;
+
+            // Schema 1 stored wall-clock calendar ticks. Preserve the numeric values and their original basis.
+            state.timeBasis = (int)MatchRivalTimeBasis.LegacyCalendarTicks;
+            state.schemaVersion = CurrentSchemaVersion;
+            return true;
         }
 
         internal static MatchRivalStateData CreateDefault()
@@ -204,6 +218,8 @@ namespace ActionFit.MatchRival
             if (state == null) throw new FormatException("MatchRival state is null.");
             if (state.schemaVersion != CurrentSchemaVersion)
                 throw new NotSupportedException($"Unsupported MatchRival schema version {state.schemaVersion}.");
+            if (!Enum.IsDefined(typeof(MatchRivalTimeBasis), state.timeBasis))
+                throw new FormatException("MatchRival time basis is invalid.");
             if (state.stage < MatchRivalEngine.MinStage || state.stage > MatchRivalEngine.MaxStage)
                 throw new FormatException("MatchRival stage is outside the supported range.");
             if (state.collectedBeans < 0 || state.previousDisplayedBeans < 0 || state.previousDisplayedRivalBeans < 0)

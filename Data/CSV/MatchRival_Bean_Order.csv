@@ -1,0 +1,23 @@
+﻿매치라이벌에서 주문 완료 조건으로 증가하는 콩 진행도를 정의하는 시트입니다. 머지 레벨별 진행도 가산량과 세그먼트 조건을 관리합니다.,,
+주문 완료 아이템의 머지 레벨,적용할 네트워크 세그먼트,조건 달성 시 증가하는 콩 진행도
+OrderItemValue(int)[key],NetSeg(enum:NetworkSegment)[key],CompleteReward(int)
+3,,3
+3,Reward,2
+4,,5
+4,Reward,4
+5,,10
+5,Reward,8
+6,,15
+6,Reward,12
+7,,20
+7,Reward,16
+8,,30
+8,Reward,24
+9,,45
+9,Reward,36
+10,,65
+10,Reward,52
+11,,90
+11,Reward,72
+12,,120
+12,Reward,96

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ActionFit.Content;
+using ActionFit.Time;
 
 namespace ActionFit.MatchRival
 {
@@ -12,7 +13,9 @@ namespace ActionFit.MatchRival
         private readonly IContentStateStore _stateStore;
         private readonly IContentRewardService _rewardService;
         private readonly IMatchRivalCatalogResolver _catalogResolver;
-        private readonly IMatchRivalClock _clock;
+        private readonly IClock _clock;
+        private readonly TimeZoneInfo _calendarTimeZone;
+        private readonly TimeZoneInfo _legacyCalendarTimeZone;
         private readonly IMatchRivalRandom _random;
         private readonly IMatchRivalProgressCurveProvider _curveProvider;
         private readonly IMatchRivalOpponentProvider _opponentProvider;
@@ -36,11 +39,44 @@ namespace ActionFit.MatchRival
             IMatchRivalAccessPolicy accessPolicy,
             IMatchRivalSchedulePolicy schedulePolicy,
             IMatchRivalAnalyticsSink analytics = null)
+            : this(
+                stateStore,
+                rewardService,
+                catalogResolver,
+                new LegacyMatchRivalClockAdapter(clock),
+                TimeZoneInfo.Utc,
+                TimeZoneInfo.Utc,
+                random,
+                curveProvider,
+                opponentProvider,
+                contentId,
+                accessPolicy,
+                schedulePolicy,
+                analytics)
+        {
+        }
+
+        public MatchRivalEngine(
+            IContentStateStore stateStore,
+            IContentRewardService rewardService,
+            IMatchRivalCatalogResolver catalogResolver,
+            IClock clock,
+            TimeZoneInfo calendarTimeZone,
+            TimeZoneInfo legacyCalendarTimeZone,
+            IMatchRivalRandom random,
+            IMatchRivalProgressCurveProvider curveProvider,
+            IMatchRivalOpponentProvider opponentProvider,
+            string contentId,
+            IMatchRivalAccessPolicy accessPolicy,
+            IMatchRivalSchedulePolicy schedulePolicy,
+            IMatchRivalAnalyticsSink analytics = null)
         {
             _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
             _rewardService = rewardService ?? throw new ArgumentNullException(nameof(rewardService));
             _catalogResolver = catalogResolver ?? throw new ArgumentNullException(nameof(catalogResolver));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            _calendarTimeZone = calendarTimeZone ?? throw new ArgumentNullException(nameof(calendarTimeZone));
+            _legacyCalendarTimeZone = legacyCalendarTimeZone ?? throw new ArgumentNullException(nameof(legacyCalendarTimeZone));
             _random = random ?? throw new ArgumentNullException(nameof(random));
             _curveProvider = curveProvider ?? throw new ArgumentNullException(nameof(curveProvider));
             _opponentProvider = opponentProvider ?? throw new ArgumentNullException(nameof(opponentProvider));
@@ -63,7 +99,19 @@ namespace ActionFit.MatchRival
         public bool IsRewardServiceAvailable => _rewardService.IsAvailable;
         public bool IsEventActive => _accessPolicy.IsAccessAllowed
             && _schedulePolicy.IsEnabled
-            && _state.eventEndTicks > _clock.Now.Ticks;
+            && _state.eventEndTicks > NowTicks;
+        public bool IsEventDay => _schedulePolicy.IsEnabled && _schedulePolicy.IsActiveDay(CalendarNow.DayOfWeek);
+        public TimeSpan EventRemainingTime => RemainingUntil(_state.eventEndTicks);
+        public TimeSpan ExpectedRemainingTime
+        {
+            get
+            {
+                TimeSpan remaining = EventRemainingTime;
+                if (remaining > TimeSpan.Zero) return remaining;
+                if (!IsEventDay) return TimeSpan.Zero;
+                return RemainingUntil(GetActiveWindowEndTicks());
+            }
+        }
         public int Stage => _state.stage;
         public bool IsHard => _state.isHard;
         public int CollectedBeans => _state.collectedBeans;
@@ -83,7 +131,7 @@ namespace ActionFit.MatchRival
             get
             {
                 if (!IsMatchActive) return TimeSpan.Zero;
-                double elapsedSeconds = (_clock.Now.Ticks - _state.matchStartTicks)
+                double elapsedSeconds = (NowTicks - _state.matchStartTicks)
                     / (double)TimeSpan.TicksPerSecond;
                 double remaining = _state.rivalTimeLimitSeconds - elapsedSeconds;
                 if (remaining <= 0d) return TimeSpan.Zero;
@@ -129,10 +177,11 @@ namespace ActionFit.MatchRival
                 return;
             }
 
-            MatchRivalStateData restored = MatchRivalStateSerializer.Deserialize(json);
+            MatchRivalStateData restored = MatchRivalStateSerializer.Deserialize(json, out bool upgraded);
             _state = restored;
             _catalog = ResolveCatalog();
             ValidateCatalogState();
+            if (upgraded) Persist(true);
             RecoverPendingTransaction();
             NotifyStateChanged();
         }
@@ -145,6 +194,7 @@ namespace ActionFit.MatchRival
             MatchRivalCatalog catalog = _catalogResolver.Current
                 ?? throw new InvalidOperationException("Current MatchRival catalog is unavailable.");
             var imported = MatchRivalStateSerializer.CreateDefault();
+            imported.timeBasis = (int)MatchRivalTimeBasis.LegacyCalendarTicks;
             imported.catalogVersion = catalog.CatalogVersion;
             imported.balanceRevision = catalog.BalanceRevision;
             imported.stage = Math.Max(MinStage, Math.Min(MaxStage, importState.Stage));
@@ -187,15 +237,16 @@ namespace ActionFit.MatchRival
         public bool TryStartEvent()
         {
             if (!_accessPolicy.IsAccessAllowed || !_schedulePolicy.IsEnabled
-                || !_schedulePolicy.IsActiveDay(_clock.Now.DayOfWeek))
+                || !_schedulePolicy.IsActiveDay(CalendarNow.DayOfWeek))
                 return false;
             if (_state.eventStarted) return false;
             if (IsEventActive) return false;
 
             MatchRivalCatalog current = _catalogResolver.Current
                 ?? throw new InvalidOperationException("Current MatchRival catalog is unavailable.");
-            DateTime end = _schedulePolicy.GetActiveWindowEnd(_clock.Now);
-            if (end.Ticks <= _clock.Now.Ticks)
+            _state.timeBasis = (int)MatchRivalTimeBasis.UtcTicks;
+            long endTicks = GetActiveWindowEndTicks();
+            if (endTicks <= NowTicks)
                 throw new InvalidOperationException("MatchRival schedule returned a non-future end time.");
 
             bool tutorialDone = _state.tutorialDone;
@@ -205,7 +256,7 @@ namespace ActionFit.MatchRival
             _state.balanceRevision = current.BalanceRevision;
             _state.eventStarted = true;
             _state.pendingEnd = false;
-            _state.eventEndTicks = end.Ticks;
+            _state.eventEndTicks = endTicks;
             _catalog = current;
             Save(true);
             _analytics.EventStarted(_state.eventEndTicks);
@@ -220,7 +271,7 @@ namespace ActionFit.MatchRival
                 return;
             }
 
-            if (!_state.eventStarted || _state.eventEndTicks > _clock.Now.Ticks) return;
+            if (!_state.eventStarted || _state.eventEndTicks > NowTicks) return;
             if (IsMatchActive && CurrentResult == MatchRivalResult.None) return;
             if (_state.pendingEnd) return;
             _state.pendingEnd = true;
@@ -273,7 +324,7 @@ namespace ActionFit.MatchRival
             _state.opponent = ToData(_opponentProvider.CreateOpponent());
             _state.rivalCurveIndex = _random.Range(0, _curveProvider.CurveCount);
             _state.rivalTimeLimitSeconds = _random.Range(minSeconds, maxSeconds);
-            _state.matchStartTicks = _clock.Now.Ticks;
+            _state.matchStartTicks = NowTicks;
             _state.collectedBeans = 0;
             _state.previousDisplayedBeans = 0;
             _state.previousDisplayedRivalBeans = 0;
@@ -397,10 +448,48 @@ namespace ActionFit.MatchRival
         public bool ForceLose()
         {
             if (!IsMatchActive || CurrentResult != MatchRivalResult.None) return false;
-            _state.matchStartTicks = _clock.Now.Ticks
+            _state.matchStartTicks = NowTicks
                 - TimeSpan.FromSeconds(_state.rivalTimeLimitSeconds + 1f).Ticks;
             Save(true);
             return true;
+        }
+
+        private DateTime UtcNow
+        {
+            get
+            {
+                DateTime utcNow = _clock.UtcNow;
+                if (utcNow.Kind != DateTimeKind.Utc)
+                    throw new InvalidOperationException("IClock.UtcNow must have DateTimeKind.Utc.");
+                return utcNow;
+            }
+        }
+
+        private TimeZoneInfo ActiveCalendarTimeZone => (MatchRivalTimeBasis)_state.timeBasis
+            == MatchRivalTimeBasis.LegacyCalendarTicks
+                ? _legacyCalendarTimeZone
+                : _calendarTimeZone;
+
+        private DateTime CalendarNow => _clock.GetCurrentTime(ActiveCalendarTimeZone).DateTime;
+
+        private long NowTicks => (MatchRivalTimeBasis)_state.timeBasis == MatchRivalTimeBasis.LegacyCalendarTicks
+            ? CalendarNow.Ticks
+            : UtcNow.Ticks;
+
+        private long GetActiveWindowEndTicks()
+        {
+            DateTime calendarEnd = _schedulePolicy.GetActiveWindowEnd(CalendarNow);
+            if ((MatchRivalTimeBasis)_state.timeBasis == MatchRivalTimeBasis.LegacyCalendarTicks)
+                return calendarEnd.Ticks;
+
+            DateTime unspecifiedEnd = DateTime.SpecifyKind(calendarEnd, DateTimeKind.Unspecified);
+            return TimeZoneInfo.ConvertTimeToUtc(unspecifiedEnd, _calendarTimeZone).Ticks;
+        }
+
+        private TimeSpan RemainingUntil(long endTicks)
+        {
+            long remainingTicks = endTicks - NowTicks;
+            return remainingTicks > 0 ? TimeSpan.FromTicks(remainingTicks) : TimeSpan.Zero;
         }
 
         private void RecoverPendingTransaction()
@@ -542,10 +631,15 @@ namespace ActionFit.MatchRival
 
         private void Save(bool flush)
         {
+            Persist(flush);
+            NotifyStateChanged();
+        }
+
+        private void Persist(bool flush)
+        {
             MatchRivalStateSerializer.Validate(_state);
             _stateStore.Save(_contentId, MatchRivalStateSerializer.Serialize(_state));
             if (flush && _stateStore is IFlushableContentStateStore flushable) flushable.Flush();
-            NotifyStateChanged();
         }
 
         private void NotifyStateChanged()

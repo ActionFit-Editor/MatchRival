@@ -1,6 +1,6 @@
 {
   "name": "com.actionfit.match-rival",
-  "version": "0.1.6",
+  "version": "0.2.1",
   "displayName": "ActionFit Match Rival",
   "description": "Reusable scheduled rival match engine with durable state migration and idempotent rewards.",
   "unity": "6000.2",
@@ -8,6 +8,7 @@
     "name": "ActionFit"
   },
   "dependencies": {
-    "com.actionfit.content-core": "0.2.3"
+    "com.actionfit.content-core": "0.2.3",
+    "com.actionfit.time": "1.0.4"
   }
 }

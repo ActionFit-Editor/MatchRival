@@ -167,6 +167,80 @@ namespace ActionFit.MatchRival.Tests
             Assert.Throws<InvalidOperationException>(() => context.CreateEngine().Restore());
         }
 
+        [Test]
+        public void Restore_SchemaOne_PreservesLegacyTicksAndPersistsSchemaTwo()
+        {
+            TestContext context = CreateContext();
+            StartMatch(context.Engine);
+            long eventEndTicks = context.Engine.State.EventEndTicks;
+            long matchStartTicks = context.Engine.MatchStartTicks;
+            context.Store.Json = context.Store.Json.Replace(
+                "\"schemaVersion\":2,\"timeBasis\":1,",
+                "\"schemaVersion\":1,");
+            context.Store.SaveCount = 0;
+            context.Store.FlushCount = 0;
+
+            MatchRivalEngine restored = context.CreateEngine();
+            int stateChangedCount = 0;
+            restored.StateChanged += _ => stateChangedCount++;
+
+            restored.Restore();
+
+            Assert.That(restored.State.SchemaVersion, Is.EqualTo(2));
+            Assert.That(restored.State.TimeBasis, Is.EqualTo(MatchRivalTimeBasis.LegacyCalendarTicks));
+            Assert.That(restored.State.EventEndTicks, Is.EqualTo(eventEndTicks));
+            Assert.That(restored.MatchStartTicks, Is.EqualTo(matchStartTicks));
+            Assert.That(context.Store.Json, Does.Contain("\"schemaVersion\":2"));
+            Assert.That(context.Store.Json, Does.Contain("\"timeBasis\":0"));
+            Assert.That(context.Store.SaveCount, Is.EqualTo(1));
+            Assert.That(context.Store.FlushCount, Is.EqualTo(1));
+            Assert.That(stateChangedCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Restore_UnsupportedOldSchema_RejectsWithoutOverwritingState()
+        {
+            TestContext context = CreateContext();
+            const string unsupportedJson = "{\"schemaVersion\":0}";
+            context.Store.Json = unsupportedJson;
+
+            Assert.Throws<NotSupportedException>(() => context.CreateEngine().Restore());
+
+            Assert.That(context.Store.Json, Is.EqualTo(unsupportedJson));
+            Assert.That(context.Store.SaveCount, Is.Zero);
+            Assert.That(context.Store.FlushCount, Is.Zero);
+        }
+
+        [Test]
+        public void Restore_SchemaOneMigrationSaveFails_DoesNotGrantPendingReward()
+        {
+            TestContext context = CreateContext();
+            StartMatch(context.Engine);
+            context.Engine.AddBeans(context.Engine.RequiredBeans);
+            Assert.That(context.Engine.PrepareResultReward(MatchRivalResult.Win), Is.True);
+            string transactionId =
+                $"tests/match-rival/event/{context.Engine.State.EventEndTicks}/round/1/win";
+            context.Store.Json = context.Store.Json
+                .Replace("\"schemaVersion\":2,\"timeBasis\":1,", "\"schemaVersion\":1,")
+                .Replace("\"pendingTransactionId\":\"\"", $"\"pendingTransactionId\":\"{transactionId}\"");
+            context.Store.SaveCount = 0;
+            context.Store.FlushCount = 0;
+            context.Store.FailOnSaveNumber = 1;
+
+            Assert.Throws<InvalidOperationException>(() => context.CreateEngine().Restore());
+
+            Assert.That(context.Rewards.GrantCalls, Is.Zero);
+            Assert.That(context.Store.Json, Does.Contain("\"schemaVersion\":1"));
+
+            context.Store.FailOnSaveNumber = 0;
+            context.CreateEngine().Restore();
+
+            Assert.That(context.Rewards.GrantCalls, Is.EqualTo(1));
+            Assert.That(context.Rewards.Balance("Energy"), Is.EqualTo(10));
+            Assert.That(context.Store.Json, Does.Contain("\"schemaVersion\":2"));
+            Assert.That(context.Store.Json, Does.Contain("\"timeBasis\":0"));
+        }
+
         private static void StartMatch(MatchRivalEngine engine)
         {
             Assert.That(engine.TryStartEvent(), Is.True);
@@ -214,6 +288,7 @@ namespace ActionFit.MatchRival.Tests
             public string Json;
             public int SaveCount;
             public int FailOnSaveNumber;
+            public int FlushCount;
 
             public bool TryLoad(string contentId, out string json)
             {
@@ -234,7 +309,10 @@ namespace ActionFit.MatchRival.Tests
                 Json = null;
             }
 
-            public void Flush() { }
+            public void Flush()
+            {
+                FlushCount++;
+            }
         }
 
         private sealed class MemoryRewards : IContentRewardService

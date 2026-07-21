@@ -9,9 +9,9 @@ catalog, and reward-safety contracts in consuming projects.
 - Display name: ActionFit Match Rival
 - Repository: `https://github.com/ActionFit-Editor/MatchRival.git`
 - Repository visibility: Public
-- Current package version at generation time: `0.1.6`
+- Current package version at generation time: `0.2.1`
 - Unity version: `6000.2`
-- Runtime dependency: `com.actionfit.content-core@0.2.1`
+- Runtime dependencies: `com.actionfit.content-core@0.2.3` and `com.actionfit.time@1.0.4`
 
 ## Purpose
 
@@ -19,7 +19,7 @@ The package owns the scheduled event window, stage 1-10 state, Easy/Hard transit
 deadline and curve progress calculation, bean clamping, schema-versioned persistence, pinned
 catalog identity, and idempotent round/box reward recovery.
 
-It does not own project event buses, `DataStore`, `DatabaseManager`, CSV/SO loading,
+It does not own project event buses, `DataStore`, `DatabaseManager`, generated SO loading,
 `TimeProvider`, project inventory mutation, analytics SDKs, UI, Addressables, localization,
 audio, prefabs, or migration reads from Cat Merge legacy keys. Optional reusable presentation
 lives in the separate `com.actionfit.match-rival.ui` package; never add UI Foundation,
@@ -37,7 +37,13 @@ Requested router entry:
 - `IMatchRivalCatalogResolver` must resolve the pinned version and balance revision for an
   active event. Unknown pins fail explicitly instead of silently switching balance.
 - `IMatchRivalSchedulePolicy` preserves the consuming game's local tick epoch and active-window
-  calculation. An empty policy is the kill switch.
+  calculation. An empty policy is the kill switch. The engine consumes `ActionFit.Time.IClock`
+  plus an explicit calendar: server mode uses synchronized UTC and `TimeZoneInfo.Utc`, while
+  device mode uses device-backed UTC and `TimeZoneInfo.Local`.
+- New deadlines use UTC ticks with schema/basis metadata. Imported active local ticks keep the
+  configured legacy calendar until the active event ends and are never relabeled as UTC.
+- Canonical balance CSVs ship under `Data/CSV/`. Generated Row/Table code and imported Table SOs
+  remain project outputs under `Assets/_Data/_MatchRival/` and are converted by a project adapter.
 - `IMatchRivalProgressCurveProvider` evaluates the project-owned rival curves without moving
   animation assets into the package.
 - `IContentStateStore` stores one opaque schema-versioned JSON snapshot. Critical event, match,
@@ -63,6 +69,11 @@ Project migration must restore valid package JSON first, preserve a corrupt back
 deleting only the invalid runtime snapshot, import legacy fields only through
 `MatchRivalImportState`, flush the package snapshot, and then write the migration marker. Keep
 legacy values during the first rollout for rollback.
+
+Package schema 1 snapshots are valid legacy input. Restore upgrades them to schema 2 with
+`LegacyCalendarTicks` without changing `eventEndTicks` or `matchStartTicks`, validates the pinned
+catalog, and durably saves the upgraded snapshot before pending reward recovery. Unknown older or
+future schemas remain fail-closed and must not be overwritten.
 
 Do not move or rewrite project prefabs, GUIDs, Addressable keys, analytics keys, or the separate
 `match_rival_bot` root as part of package work.

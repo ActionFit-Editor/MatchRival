@@ -1,7 +1,15 @@
 using System;
+using ActionFit.Time;
 
 namespace ActionFit.MatchRival
 {
+    public enum MatchRivalTimeBasis
+    {
+        LegacyCalendarTicks = 0,
+        UtcTicks = 1
+    }
+
+    [Obsolete("Inject ActionFit.Time.IClock and explicit calendar time zones into MatchRivalEngine.")]
     public interface IMatchRivalClock
     {
         DateTime Now { get; }
@@ -51,9 +59,31 @@ namespace ActionFit.MatchRival
         void EventEnded(long eventEndTicks);
     }
 
-    public sealed class SystemMatchRivalClock : IMatchRivalClock
+    public sealed class SystemMatchRivalClock : IMatchRivalClock, IClock
     {
-        public DateTime Now => DateTime.Now;
+        private readonly IClock _clock;
+        private readonly TimeZoneInfo _calendarTimeZone;
+
+        public SystemMatchRivalClock(IClock clock, TimeZoneInfo calendarTimeZone)
+        {
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            _calendarTimeZone = calendarTimeZone ?? throw new ArgumentNullException(nameof(calendarTimeZone));
+        }
+
+        public DateTime Now => _clock.GetCurrentTime(_calendarTimeZone).DateTime;
+        public DateTime UtcNow => _clock.UtcNow;
+    }
+
+    internal sealed class LegacyMatchRivalClockAdapter : IClock
+    {
+        private readonly IMatchRivalClock _legacyClock;
+
+        internal LegacyMatchRivalClockAdapter(IMatchRivalClock legacyClock)
+        {
+            _legacyClock = legacyClock ?? throw new ArgumentNullException(nameof(legacyClock));
+        }
+
+        public DateTime UtcNow => new DateTime(_legacyClock.Now.Ticks, DateTimeKind.Utc);
     }
 
     public sealed class SystemMatchRivalRandom : IMatchRivalRandom
