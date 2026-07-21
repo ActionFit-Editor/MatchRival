@@ -28,6 +28,51 @@ namespace ActionFit.MatchRival.Tests
         }
 
         [Test]
+        public void NewEventCalendar_DoesNotUseInactiveLegacyStateBasis()
+        {
+            TimeZoneInfo legacyCalendar = TimeZoneInfo.CreateCustomTimeZone(
+                "MatchRival.Tests.Legacy+09",
+                TimeSpan.FromHours(9),
+                "MatchRival Tests Legacy +09",
+                "MatchRival Tests Legacy +09");
+
+            TestContext rejectedContext = CreateContext();
+            rejectedContext.Schedule.WeekendOnly = true;
+            var rejectedClock = new ActionFit.Time.ManualClock(
+                new DateTime(2026, 7, 17, 20, 0, 0, DateTimeKind.Utc));
+            MatchRivalEngine rejected = rejectedContext.CreateEngine(
+                rejectedClock,
+                TimeZoneInfo.Utc,
+                legacyCalendar);
+            Assert.That(rejected.ImportStateIfEmpty(new MatchRivalImportState()), Is.True);
+            int rejectedSaveCount = rejectedContext.Store.SaveCount;
+
+            Assert.That(rejected.IsEventDay, Is.False);
+            Assert.That(rejected.ExpectedRemainingTime, Is.EqualTo(TimeSpan.Zero));
+            Assert.That(rejected.TryStartEvent(), Is.False);
+            Assert.That(rejected.State.TimeBasis, Is.EqualTo(MatchRivalTimeBasis.LegacyCalendarTicks));
+            Assert.That(rejectedContext.Store.SaveCount, Is.EqualTo(rejectedSaveCount));
+
+            TestContext acceptedContext = CreateContext();
+            acceptedContext.Schedule.WeekendOnly = true;
+            var acceptedClock = new ActionFit.Time.ManualClock(
+                new DateTime(2026, 7, 19, 20, 0, 0, DateTimeKind.Utc));
+            MatchRivalEngine accepted = acceptedContext.CreateEngine(
+                acceptedClock,
+                TimeZoneInfo.Utc,
+                legacyCalendar);
+            Assert.That(accepted.ImportStateIfEmpty(new MatchRivalImportState()), Is.True);
+
+            Assert.That(accepted.IsEventDay, Is.True);
+            Assert.That(accepted.ExpectedRemainingTime, Is.EqualTo(TimeSpan.FromHours(4)));
+            Assert.That(accepted.TryStartEvent(), Is.True);
+            Assert.That(accepted.State.TimeBasis, Is.EqualTo(MatchRivalTimeBasis.UtcTicks));
+            Assert.That(
+                accepted.State.EventEndTicks,
+                Is.EqualTo(new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc).Ticks));
+        }
+
+        [Test]
         public void EndEvent_FinalizesPreparedRoundRewardBeforeReset()
         {
             TestContext context = CreateContext();
@@ -281,6 +326,26 @@ namespace ActionFit.MatchRival.Tests
                     new TestAccess(),
                     Schedule);
             }
+
+            public MatchRivalEngine CreateEngine(
+                ActionFit.Time.IClock clock,
+                TimeZoneInfo calendarTimeZone,
+                TimeZoneInfo legacyCalendarTimeZone)
+            {
+                return new MatchRivalEngine(
+                    Store,
+                    Rewards,
+                    Catalog,
+                    clock,
+                    calendarTimeZone,
+                    legacyCalendarTimeZone,
+                    new MinimumRandom(),
+                    new LinearCurve(),
+                    new TestOpponentProvider(),
+                    "tests/match-rival",
+                    new TestAccess(),
+                    Schedule);
+            }
         }
 
         private sealed class MemoryStore : IContentStateStore, IFlushableContentStateStore
@@ -364,9 +429,25 @@ namespace ActionFit.MatchRival.Tests
         private sealed class TestSchedule : IMatchRivalSchedulePolicy
         {
             public bool Enabled = true;
+            public bool WeekendOnly;
             public bool IsEnabled => Enabled;
-            public bool IsActiveDay(DayOfWeek dayOfWeek) => true;
-            public DateTime GetActiveWindowEnd(DateTime now) => now.Date.AddDays(2);
+            public bool IsActiveDay(DayOfWeek dayOfWeek) => !WeekendOnly
+                || dayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+
+            public DateTime GetActiveWindowEnd(DateTime now)
+            {
+                if (!IsEnabled || !IsActiveDay(now.DayOfWeek))
+                    throw new InvalidOperationException("Test schedule is not active.");
+                if (!WeekendOnly) return now.Date.AddDays(2);
+
+                for (int dayOffset = 1; dayOffset <= 7; dayOffset++)
+                {
+                    DateTime candidate = now.Date.AddDays(dayOffset);
+                    if (!IsActiveDay(candidate.DayOfWeek)) return candidate;
+                }
+
+                return now.Date.AddDays(7);
+            }
         }
 
         private sealed class TestAccess : IMatchRivalAccessPolicy

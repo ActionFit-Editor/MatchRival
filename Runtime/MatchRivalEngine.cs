@@ -100,7 +100,7 @@ namespace ActionFit.MatchRival
         public bool IsEventActive => _accessPolicy.IsAccessAllowed
             && _schedulePolicy.IsEnabled
             && _state.eventEndTicks > NowTicks;
-        public bool IsEventDay => _schedulePolicy.IsEnabled && _schedulePolicy.IsActiveDay(CalendarNow.DayOfWeek);
+        public bool IsEventDay => IsActiveEventDay(MatchRivalTimeBasis.UtcTicks);
         public TimeSpan EventRemainingTime => RemainingUntil(_state.eventEndTicks);
         public TimeSpan ExpectedRemainingTime
         {
@@ -108,8 +108,9 @@ namespace ActionFit.MatchRival
             {
                 TimeSpan remaining = EventRemainingTime;
                 if (remaining > TimeSpan.Zero) return remaining;
-                if (!IsEventDay) return TimeSpan.Zero;
-                return RemainingUntil(GetActiveWindowEndTicks());
+                return TryGetActiveWindowEndTicks(MatchRivalTimeBasis.UtcTicks, out long endTicks)
+                    ? RemainingUntil(endTicks, MatchRivalTimeBasis.UtcTicks)
+                    : TimeSpan.Zero;
             }
         }
         public int Stage => _state.stage;
@@ -236,24 +237,21 @@ namespace ActionFit.MatchRival
 
         public bool TryStartEvent()
         {
-            if (!_accessPolicy.IsAccessAllowed || !_schedulePolicy.IsEnabled
-                || !_schedulePolicy.IsActiveDay(CalendarNow.DayOfWeek))
-                return false;
+            if (!_accessPolicy.IsAccessAllowed || !_schedulePolicy.IsEnabled) return false;
             if (_state.eventStarted) return false;
             if (IsEventActive) return false;
+            if (!TryGetActiveWindowEndTicks(MatchRivalTimeBasis.UtcTicks, out long endTicks))
+                return false;
 
             MatchRivalCatalog current = _catalogResolver.Current
                 ?? throw new InvalidOperationException("Current MatchRival catalog is unavailable.");
-            _state.timeBasis = (int)MatchRivalTimeBasis.UtcTicks;
-            long endTicks = GetActiveWindowEndTicks();
-            if (endTicks <= NowTicks)
-                throw new InvalidOperationException("MatchRival schedule returned a non-future end time.");
 
             bool tutorialDone = _state.tutorialDone;
             ResetGameplayState();
             _state.tutorialDone = tutorialDone;
             _state.catalogVersion = current.CatalogVersion;
             _state.balanceRevision = current.BalanceRevision;
+            _state.timeBasis = (int)MatchRivalTimeBasis.UtcTicks;
             _state.eventStarted = true;
             _state.pendingEnd = false;
             _state.eventEndTicks = endTicks;
@@ -465,30 +463,67 @@ namespace ActionFit.MatchRival
             }
         }
 
-        private TimeZoneInfo ActiveCalendarTimeZone => (MatchRivalTimeBasis)_state.timeBasis
-            == MatchRivalTimeBasis.LegacyCalendarTicks
-                ? _legacyCalendarTimeZone
-                : _calendarTimeZone;
+        private MatchRivalTimeBasis TimeBasis => (MatchRivalTimeBasis)_state.timeBasis;
+
+        private TimeZoneInfo ActiveCalendarTimeZone => TimeBasis == MatchRivalTimeBasis.LegacyCalendarTicks
+            ? _legacyCalendarTimeZone
+            : _calendarTimeZone;
 
         private DateTime CalendarNow => _clock.GetCurrentTime(ActiveCalendarTimeZone).DateTime;
 
-        private long NowTicks => (MatchRivalTimeBasis)_state.timeBasis == MatchRivalTimeBasis.LegacyCalendarTicks
+        private long NowTicks => TimeBasis == MatchRivalTimeBasis.LegacyCalendarTicks
             ? CalendarNow.Ticks
             : UtcNow.Ticks;
 
-        private long GetActiveWindowEndTicks()
+        private bool IsActiveEventDay(MatchRivalTimeBasis basis)
         {
-            DateTime calendarEnd = _schedulePolicy.GetActiveWindowEnd(CalendarNow);
-            if ((MatchRivalTimeBasis)_state.timeBasis == MatchRivalTimeBasis.LegacyCalendarTicks)
-                return calendarEnd.Ticks;
+            DateTime calendarNow = GetCalendarNow(basis);
+            return _schedulePolicy.IsEnabled && _schedulePolicy.IsActiveDay(calendarNow.DayOfWeek);
+        }
 
-            DateTime unspecifiedEnd = DateTime.SpecifyKind(calendarEnd, DateTimeKind.Unspecified);
-            return TimeZoneInfo.ConvertTimeToUtc(unspecifiedEnd, _calendarTimeZone).Ticks;
+        private bool TryGetActiveWindowEndTicks(MatchRivalTimeBasis basis, out long endTicks)
+        {
+            endTicks = 0L;
+            DateTime calendarNow = GetCalendarNow(basis);
+            if (!_schedulePolicy.IsEnabled || !_schedulePolicy.IsActiveDay(calendarNow.DayOfWeek))
+                return false;
+
+            DateTime calendarEnd = _schedulePolicy.GetActiveWindowEnd(calendarNow);
+            long nowTicks;
+            if (basis == MatchRivalTimeBasis.LegacyCalendarTicks)
+            {
+                endTicks = calendarEnd.Ticks;
+                nowTicks = calendarNow.Ticks;
+            }
+            else
+            {
+                DateTime unspecifiedEnd = DateTime.SpecifyKind(calendarEnd, DateTimeKind.Unspecified);
+                endTicks = TimeZoneInfo.ConvertTimeToUtc(unspecifiedEnd, _calendarTimeZone).Ticks;
+                nowTicks = UtcNow.Ticks;
+            }
+
+            return endTicks > nowTicks;
+        }
+
+        private DateTime GetCalendarNow(MatchRivalTimeBasis basis)
+        {
+            TimeZoneInfo timeZone = basis == MatchRivalTimeBasis.LegacyCalendarTicks
+                ? _legacyCalendarTimeZone
+                : _calendarTimeZone;
+            return _clock.GetCurrentTime(timeZone).DateTime;
         }
 
         private TimeSpan RemainingUntil(long endTicks)
         {
-            long remainingTicks = endTicks - NowTicks;
+            return RemainingUntil(endTicks, TimeBasis);
+        }
+
+        private TimeSpan RemainingUntil(long endTicks, MatchRivalTimeBasis basis)
+        {
+            long nowTicks = basis == MatchRivalTimeBasis.LegacyCalendarTicks
+                ? GetCalendarNow(basis).Ticks
+                : UtcNow.Ticks;
+            long remainingTicks = endTicks - nowTicks;
             return remainingTicks > 0 ? TimeSpan.FromTicks(remainingTicks) : TimeSpan.Zero;
         }
 
