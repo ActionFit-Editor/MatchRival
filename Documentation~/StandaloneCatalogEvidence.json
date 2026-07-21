@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "catalogFactory": "Runtime/MatchRivalCatalogFactory.cs",
+  "parityTest": "Tests/Editor/MatchRivalStandaloneCatalogParityTests.cs",
+  "csv": [
+    {
+      "path": "Data/CSV/MatchRival_Bean_Order.csv",
+      "sha256": "a35cc91726bf356c3629438ed41972dc0ab7233d8e066664472fd2114b19848d"
+    },
+    {
+      "path": "Data/CSV/MatchRival_Difficulty.csv",
+      "sha256": "7abb81f80689f07fe8e535d39dd8d28156a1c6a79c41541f93048be15a3c7121"
+    },
+    {
+      "path": "Data/CSV/MatchRival_EventSettings.csv",
+      "sha256": "0127019bfd93729071585583b134917a8223be31c1d996d03eaf83dd48483cad"
+    },
+    {
+      "path": "Data/CSV/MatchRival_Reward_Box.csv",
+      "sha256": "2f536f44c63be76ca7e75111a1dc257e6b6deb152a3466561e70fd643ba9a709"
+    },
+    {
+      "path": "Data/CSV/MatchRival_Reward_Round.csv",
+      "sha256": "2de43bd22eaebf1d240a1b297de9464953e218bebbaf1a464772326a1d48e4d7"
+    }
+  ]
+}

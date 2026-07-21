@@ -9,7 +9,7 @@ catalog, and reward-safety contracts in consuming projects.
 - Display name: ActionFit Match Rival
 - Repository: `https://github.com/ActionFit-Editor/MatchRival.git`
 - Repository visibility: Public
-- Current package version at generation time: `0.2.1`
+- Current package version at generation time: `0.2.2`
 - Unity version: `6000.2`
 - Runtime dependencies: `com.actionfit.content-core@0.2.3` and `com.actionfit.time@1.0.4`
 
@@ -42,8 +42,13 @@ Requested router entry:
   device mode uses device-backed UTC and `TimeZoneInfo.Local`.
 - New deadlines use UTC ticks with schema/basis metadata. Imported active local ticks keep the
   configured legacy calendar until the active event ends and are never relabeled as UTC.
-- Canonical balance CSVs ship under `Data/CSV/`. Generated Row/Table code and imported Table SOs
-  remain project outputs under `Assets/_Data/_MatchRival/` and are converted by a project adapter.
+- Canonical balance CSVs ship under `Data/CSV/`. `MatchRivalCatalogFactory` builds the complete
+  standalone catalog and schedule for the default and `Reward` segments directly from
+  caller-provided CSV text without `AssetDatabase`, CSV Importer, generated Row/Table types, or
+  project Table SOs. Empty, malformed, duplicate, or unsupported input fails closed. Generated
+  outputs remain under `Assets/_Data/_MatchRival/`; verify their parity with
+  `Assets/_Project/Content/Tests/Editor/ContentCatalogImportedSoParityTests.cs`. Machine-readable
+  source and test evidence lives in `Documentation~/StandaloneCatalogEvidence.json`.
 - `IMatchRivalProgressCurveProvider` evaluates the project-owned rival curves without moving
   animation assets into the package.
 - `IContentStateStore` stores one opaque schema-versioned JSON snapshot. Critical event, match,
