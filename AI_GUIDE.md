@@ -9,7 +9,7 @@ catalog, and reward-safety contracts in consuming projects.
 - Display name: ActionFit Match Rival
 - Repository: `https://github.com/ActionFit-Editor/MatchRival.git`
 - Repository visibility: Public
-- Current package version at generation time: `0.2.3`
+- Current package version at generation time: `0.2.4`
 - Unity version: `6000.2`
 - Runtime dependencies: `com.actionfit.content-core@0.2.3` and `com.actionfit.time@1.0.4`
 
@@ -38,13 +38,15 @@ Requested router entry:
   active event. Unknown pins fail explicitly instead of silently switching balance.
 - `IMatchRivalSchedulePolicy` preserves the consuming game's local tick epoch and active-window
   calculation. An empty policy is the kill switch. The engine consumes `ActionFit.Time.IClock`
-  plus an explicit calendar: server mode uses synchronized UTC and `TimeZoneInfo.Utc`, while
-  device mode uses device-backed UTC and `TimeZoneInfo.Local`.
+  plus an explicit calendar and optional `calendarDayBoundaryOffset`. Clock source and calendar
+  policy are independent. A positive offset below 24 hours moves logical midnight later by
+  subtracting it for date evaluation and adding it before UTC deadline conversion.
 - New deadlines use UTC ticks with schema/basis metadata. Imported active local ticks keep the
   configured legacy calendar until the active event ends and are never relabeled as UTC.
 - New-event availability, expected duration, and window end always use the constructor-injected
   new-event calendar even when an inactive imported snapshot still records a legacy time basis.
-  A rejected start returns `false` without changing the snapshot basis or writing state.
+  Existing constructors use zero offset. A rejected start returns `false` without changing the
+  snapshot basis or writing state, and active legacy numeric ticks never inherit the new offset.
 - Canonical balance CSVs ship under `Data/CSV/`. `MatchRivalCatalogFactory` builds the complete
   standalone catalog and schedule for the default and `Reward` segments directly from
   caller-provided CSV text without `AssetDatabase`, CSV Importer, generated Row/Table types, or

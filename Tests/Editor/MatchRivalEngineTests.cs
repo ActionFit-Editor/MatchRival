@@ -73,6 +73,42 @@ namespace ActionFit.MatchRival.Tests
         }
 
         [Test]
+        public void DeviceLocalCalendar_WithNineHourBoundary_ChangesDayAtLocalNine()
+        {
+            TimeZoneInfo deviceLocalTimeZone = TimeZoneInfo.CreateCustomTimeZone(
+                "MatchRival.Tests.DeviceLocal.Boundary+09",
+                TimeSpan.FromHours(9d),
+                "Match Rival Tests Device Local Boundary +09",
+                "Match Rival Tests Device Local Boundary +09");
+            TimeSpan boundaryOffset = TimeSpan.FromHours(9d);
+            TestContext beforeContext = CreateContext();
+            beforeContext.Schedule.WeekendOnly = true;
+            TestContext atContext = CreateContext();
+            atContext.Schedule.WeekendOnly = true;
+            MatchRivalEngine beforeBoundary = beforeContext.CreateEngine(
+                new ActionFit.Time.ManualClock(
+                    new DateTime(2026, 7, 17, 23, 59, 0, DateTimeKind.Utc)),
+                deviceLocalTimeZone,
+                TimeZoneInfo.Utc,
+                boundaryOffset);
+            MatchRivalEngine atBoundary = atContext.CreateEngine(
+                new ActionFit.Time.ManualClock(
+                    new DateTime(2026, 7, 18, 0, 0, 0, DateTimeKind.Utc)),
+                deviceLocalTimeZone,
+                TimeZoneInfo.Utc,
+                boundaryOffset);
+
+            Assert.That(beforeBoundary.IsEventDay, Is.False);
+            Assert.That(beforeBoundary.TryStartEvent(), Is.False);
+            Assert.That(atBoundary.IsEventDay, Is.True);
+            Assert.That(atBoundary.TryStartEvent(), Is.True);
+            Assert.That(
+                atBoundary.State.EventEndTicks,
+                Is.EqualTo(new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc).Ticks));
+            Assert.That(atBoundary.EventRemainingTime, Is.EqualTo(TimeSpan.FromHours(48)));
+        }
+
+        [Test]
         public void EndEvent_FinalizesPreparedRoundRewardBeforeReset()
         {
             TestContext context = CreateContext();
@@ -330,7 +366,8 @@ namespace ActionFit.MatchRival.Tests
             public MatchRivalEngine CreateEngine(
                 ActionFit.Time.IClock clock,
                 TimeZoneInfo calendarTimeZone,
-                TimeZoneInfo legacyCalendarTimeZone)
+                TimeZoneInfo legacyCalendarTimeZone,
+                TimeSpan? calendarDayBoundaryOffset = null)
             {
                 return new MatchRivalEngine(
                     Store,
@@ -344,7 +381,9 @@ namespace ActionFit.MatchRival.Tests
                     new TestOpponentProvider(),
                     "tests/match-rival",
                     new TestAccess(),
-                    Schedule);
+                    Schedule,
+                    null,
+                    calendarDayBoundaryOffset ?? TimeSpan.Zero);
             }
         }
 

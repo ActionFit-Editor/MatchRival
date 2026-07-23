@@ -15,6 +15,7 @@ namespace ActionFit.MatchRival
         private readonly IMatchRivalCatalogResolver _catalogResolver;
         private readonly IClock _clock;
         private readonly TimeZoneInfo _calendarTimeZone;
+        private readonly TimeSpan _calendarDayBoundaryOffset;
         private readonly TimeZoneInfo _legacyCalendarTimeZone;
         private readonly IMatchRivalRandom _random;
         private readonly IMatchRivalProgressCurveProvider _curveProvider;
@@ -52,7 +53,8 @@ namespace ActionFit.MatchRival
                 contentId,
                 accessPolicy,
                 schedulePolicy,
-                analytics)
+                analytics,
+                TimeSpan.Zero)
         {
         }
 
@@ -70,12 +72,46 @@ namespace ActionFit.MatchRival
             IMatchRivalAccessPolicy accessPolicy,
             IMatchRivalSchedulePolicy schedulePolicy,
             IMatchRivalAnalyticsSink analytics = null)
+            : this(
+                stateStore,
+                rewardService,
+                catalogResolver,
+                clock,
+                calendarTimeZone,
+                legacyCalendarTimeZone,
+                random,
+                curveProvider,
+                opponentProvider,
+                contentId,
+                accessPolicy,
+                schedulePolicy,
+                analytics,
+                TimeSpan.Zero)
+        {
+        }
+
+        public MatchRivalEngine(
+            IContentStateStore stateStore,
+            IContentRewardService rewardService,
+            IMatchRivalCatalogResolver catalogResolver,
+            IClock clock,
+            TimeZoneInfo calendarTimeZone,
+            TimeZoneInfo legacyCalendarTimeZone,
+            IMatchRivalRandom random,
+            IMatchRivalProgressCurveProvider curveProvider,
+            IMatchRivalOpponentProvider opponentProvider,
+            string contentId,
+            IMatchRivalAccessPolicy accessPolicy,
+            IMatchRivalSchedulePolicy schedulePolicy,
+            IMatchRivalAnalyticsSink analytics,
+            TimeSpan calendarDayBoundaryOffset)
         {
             _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
             _rewardService = rewardService ?? throw new ArgumentNullException(nameof(rewardService));
             _catalogResolver = catalogResolver ?? throw new ArgumentNullException(nameof(catalogResolver));
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _calendarTimeZone = calendarTimeZone ?? throw new ArgumentNullException(nameof(calendarTimeZone));
+            _calendarDayBoundaryOffset = ValidateCalendarDayBoundaryOffset(calendarDayBoundaryOffset);
             _legacyCalendarTimeZone = legacyCalendarTimeZone ?? throw new ArgumentNullException(nameof(legacyCalendarTimeZone));
             _random = random ?? throw new ArgumentNullException(nameof(random));
             _curveProvider = curveProvider ?? throw new ArgumentNullException(nameof(curveProvider));
@@ -465,11 +501,7 @@ namespace ActionFit.MatchRival
 
         private MatchRivalTimeBasis TimeBasis => (MatchRivalTimeBasis)_state.timeBasis;
 
-        private TimeZoneInfo ActiveCalendarTimeZone => TimeBasis == MatchRivalTimeBasis.LegacyCalendarTicks
-            ? _legacyCalendarTimeZone
-            : _calendarTimeZone;
-
-        private DateTime CalendarNow => _clock.GetCurrentTime(ActiveCalendarTimeZone).DateTime;
+        private DateTime CalendarNow => GetCalendarNow(TimeBasis);
 
         private long NowTicks => TimeBasis == MatchRivalTimeBasis.LegacyCalendarTicks
             ? CalendarNow.Ticks
@@ -497,7 +529,8 @@ namespace ActionFit.MatchRival
             }
             else
             {
-                DateTime unspecifiedEnd = DateTime.SpecifyKind(calendarEnd, DateTimeKind.Unspecified);
+                DateTime actualBoundaryTime = calendarEnd.Add(_calendarDayBoundaryOffset);
+                DateTime unspecifiedEnd = ResolveValidCalendarTime(actualBoundaryTime);
                 endTicks = TimeZoneInfo.ConvertTimeToUtc(unspecifiedEnd, _calendarTimeZone).Ticks;
                 nowTicks = UtcNow.Ticks;
             }
@@ -510,7 +543,33 @@ namespace ActionFit.MatchRival
             TimeZoneInfo timeZone = basis == MatchRivalTimeBasis.LegacyCalendarTicks
                 ? _legacyCalendarTimeZone
                 : _calendarTimeZone;
-            return _clock.GetCurrentTime(timeZone).DateTime;
+            DateTime calendarNow = _clock.GetCurrentTime(timeZone).DateTime;
+            return basis == MatchRivalTimeBasis.LegacyCalendarTicks
+                ? calendarNow
+                : calendarNow.Subtract(_calendarDayBoundaryOffset);
+        }
+
+        private DateTime ResolveValidCalendarTime(DateTime calendarTime)
+        {
+            DateTime unspecified = DateTime.SpecifyKind(calendarTime, DateTimeKind.Unspecified);
+            const int maxAdvanceMinutes = 48 * 60;
+            for (int minute = 0; minute <= maxAdvanceMinutes; minute++)
+            {
+                if (!_calendarTimeZone.IsInvalidTime(unspecified)) return unspecified;
+                unspecified = unspecified.AddMinutes(1);
+            }
+
+            throw new InvalidOperationException("Unable to resolve a valid calendar boundary within 48 hours.");
+        }
+
+        private static TimeSpan ValidateCalendarDayBoundaryOffset(TimeSpan offset)
+        {
+            if (offset < TimeSpan.Zero || offset >= TimeSpan.FromDays(1))
+                throw new ArgumentOutOfRangeException(
+                    nameof(offset),
+                    offset,
+                    "Calendar day boundary offset must be at least zero and less than 24 hours.");
+            return offset;
         }
 
         private TimeSpan RemainingUntil(long endTicks)
