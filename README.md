@@ -9,7 +9,7 @@
 ```json
 {
   "dependencies": {
-    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.2.4"
+    "com.actionfit.match-rival": "https://github.com/ActionFit-Editor/MatchRival.git#0.2.5"
   }
 }
 ```

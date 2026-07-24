@@ -109,6 +109,65 @@ namespace ActionFit.MatchRival.Tests
         }
 
         [Test]
+        public void UtcCalendar_WithNegativeNineBoundary_ChangesDayAtUtcFifteen()
+        {
+            TimeSpan boundaryOffset = TimeSpan.FromHours(-9d);
+            TestContext beforeContext = CreateContext();
+            beforeContext.Schedule.WeekendOnly = true;
+            TestContext atContext = CreateContext();
+            atContext.Schedule.WeekendOnly = true;
+            MatchRivalEngine beforeBoundary = beforeContext.CreateEngine(
+                new ActionFit.Time.ManualClock(
+                    new DateTime(2026, 7, 17, 14, 59, 0, DateTimeKind.Utc)),
+                TimeZoneInfo.Utc,
+                TimeZoneInfo.Utc,
+                boundaryOffset);
+            MatchRivalEngine atBoundary = atContext.CreateEngine(
+                new ActionFit.Time.ManualClock(
+                    new DateTime(2026, 7, 17, 15, 0, 0, DateTimeKind.Utc)),
+                TimeZoneInfo.Utc,
+                TimeZoneInfo.Utc,
+                boundaryOffset);
+
+            Assert.That(beforeBoundary.IsEventDay, Is.False);
+            Assert.That(beforeBoundary.TryStartEvent(), Is.False);
+            Assert.That(atBoundary.IsEventDay, Is.True);
+            Assert.That(atBoundary.TryStartEvent(), Is.True);
+            Assert.That(
+                atBoundary.State.EventEndTicks,
+                Is.EqualTo(new DateTime(2026, 7, 19, 15, 0, 0, DateTimeKind.Utc).Ticks));
+            Assert.That(atBoundary.EventRemainingTime, Is.EqualTo(TimeSpan.FromHours(48)));
+        }
+
+        [Test]
+        public void ConfigureCalendar_RuntimeZoneChangeUsesNewPolicyForNewEvent()
+        {
+            TestContext context = CreateContext();
+            context.Schedule.WeekendOnly = true;
+            TimeZoneInfo positiveNine = TimeZoneInfo.CreateCustomTimeZone(
+                "MatchRival.Tests.Runtime.Positive09",
+                TimeSpan.FromHours(9),
+                "Match Rival Tests Runtime Positive 09",
+                "Match Rival Tests Runtime Positive 09");
+            MatchRivalEngine engine = context.CreateEngine(
+                new ActionFit.Time.ManualClock(
+                    new DateTime(2026, 7, 17, 20, 0, 0, DateTimeKind.Utc)),
+                TimeZoneInfo.Utc,
+                TimeZoneInfo.Utc,
+                TimeSpan.Zero);
+
+            Assert.That(engine.IsEventDay, Is.False);
+
+            engine.ConfigureCalendar(positiveNine, TimeSpan.Zero);
+
+            Assert.That(engine.IsEventDay, Is.True);
+            Assert.That(engine.TryStartEvent(), Is.True);
+            long activeDeadline = engine.State.EventEndTicks;
+            engine.ConfigureCalendar(TimeZoneInfo.Utc, TimeSpan.FromHours(-9));
+            Assert.That(engine.State.EventEndTicks, Is.EqualTo(activeDeadline));
+        }
+
+        [Test]
         public void EndEvent_FinalizesPreparedRoundRewardBeforeReset()
         {
             TestContext context = CreateContext();

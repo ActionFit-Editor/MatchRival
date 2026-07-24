@@ -14,8 +14,8 @@ namespace ActionFit.MatchRival
         private readonly IContentRewardService _rewardService;
         private readonly IMatchRivalCatalogResolver _catalogResolver;
         private readonly IClock _clock;
-        private readonly TimeZoneInfo _calendarTimeZone;
-        private readonly TimeSpan _calendarDayBoundaryOffset;
+        private TimeZoneInfo _calendarTimeZone;
+        private TimeSpan _calendarDayBoundaryOffset;
         private readonly TimeZoneInfo _legacyCalendarTimeZone;
         private readonly IMatchRivalRandom _random;
         private readonly IMatchRivalProgressCurveProvider _curveProvider;
@@ -126,6 +126,21 @@ namespace ActionFit.MatchRival
         }
 
         public event Action<MatchRivalState> StateChanged;
+
+        /// <summary>
+        /// Replaces the new-event calendar policy without changing active deadline ticks or basis.
+        /// </summary>
+        public void ConfigureCalendar(
+            TimeZoneInfo calendarTimeZone,
+            TimeSpan calendarDayBoundaryOffset)
+        {
+            TimeZoneInfo selectedTimeZone = calendarTimeZone
+                                            ?? throw new ArgumentNullException(nameof(calendarTimeZone));
+            TimeSpan selectedBoundary =
+                ValidateCalendarDayBoundaryOffset(calendarDayBoundaryOffset);
+            _calendarTimeZone = selectedTimeZone;
+            _calendarDayBoundaryOffset = selectedBoundary;
+        }
 
         public MatchRivalState State => new MatchRivalState(_state);
         public MatchRivalCatalog Catalog => ResolveCatalog();
@@ -564,11 +579,11 @@ namespace ActionFit.MatchRival
 
         private static TimeSpan ValidateCalendarDayBoundaryOffset(TimeSpan offset)
         {
-            if (offset < TimeSpan.Zero || offset >= TimeSpan.FromDays(1))
+            if (offset <= -TimeSpan.FromDays(1) || offset >= TimeSpan.FromDays(1))
                 throw new ArgumentOutOfRangeException(
                     nameof(offset),
                     offset,
-                    "Calendar day boundary offset must be at least zero and less than 24 hours.");
+                    "Calendar day boundary offset must be greater than -24 hours and less than 24 hours.");
             return offset;
         }
 
